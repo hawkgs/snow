@@ -6,7 +6,7 @@
     height: 480,
     fps: 30,
     terminalVelocityRate: 5,
-    snowflakeTtl: 15000,
+    snowflakeTtl: 30000,
     intensity: 2,
   };
 
@@ -74,12 +74,13 @@
   }
 
   class Snowflake {
-    constructor(x, y, size, config) {
+    constructor(x, y, size, translucency, config) {
       this.location = new Vector(x, y);
       this.acceleration = new Vector(0, 0);
       this.velocity = new Vector(0, 0);
       this.size = size;
       this.config = config;
+      this.translucency = translucency;
       this.createdAt = Date.now();
     }
 
@@ -106,8 +107,8 @@
 
       this.location.add(this.velocity);
       this.location.limit(
-        -100,
-        this.config.width + 100,
+        -300,
+        this.config.width + 300,
         0,
         this.config.height - this.size
       );
@@ -155,11 +156,14 @@
     }
 
     __createSnowflake() {
-      const x = getRandom(-100, this.config.width + 100);
+      const x = getRandom(-300, this.config.width + 300);
       const y = getRandom(-50, -10);
+      const translucency = getRandom(0.1, 1);
       const size = getRandom(1, 5);
 
-      this.snowflakes.push(new Snowflake(x, -20, size, this.config));
+      this.snowflakes.push(
+        new Snowflake(x, y, size, translucency, this.config)
+      );
     }
   }
 
@@ -191,10 +195,21 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       system.update();
 
-      system.snowflakes.forEach((sf) => {
-        ctx.fillStyle = 'rgb(86, 227, 255)';
-        ctx.fillRect(sf.location.x, sf.location.y, sf.size, sf.size);
-      });
+      for (let i = 0; i < system.snowflakes.length; i++) {
+        const sf = system.snowflakes[i];
+
+        ctx.beginPath();
+        ctx.arc(
+          sf.location.x,
+          sf.location.y,
+          sf.size / 2,
+          0,
+          2 * Math.PI,
+          false
+        );
+        ctx.fillStyle = `rgba(255, 255, 255, ${sf.translucency})`;
+        ctx.fill();
+      }
     }
 
     function startAnimating(fps) {

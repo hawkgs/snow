@@ -2,13 +2,17 @@
 <html>
   <head>
     <title>Snow</title>
-    <script src="./snow.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <script src="snow.js"></script>
   </head>
   <body>
     <div id="snow-container"></div>
   </body>
   <script>
     const el = document.getElementById('snow-container');
-    Snow.attachToElement(el);
+    Snow.attachToElement(el, {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    });
   </script>
 </html>
