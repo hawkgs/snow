@@ -5,8 +5,8 @@
     width: 640,
     height: 480,
     fps: 30,
-    terminalVelocity: 15,
-    snowflakeTtl: 10000,
+    terminalVelocityRate: 5,
+    snowflakeTtl: 15000,
     intensity: 2,
   };
 
@@ -67,13 +67,11 @@
     }
   }
 
-  // class WindForce extends Force {
-  //   constructor(vector) {
-  //     super('wind', vector);
-  //   }
-
-  //   update() {}
-  // }
+  class WindForce extends Force {
+    constructor() {
+      super(0.005, 0, 'wind');
+    }
+  }
 
   class Snowflake {
     constructor(x, y, size, config) {
@@ -97,18 +95,19 @@
     }
 
     update() {
+      if (this.location.y >= this.config.height - this.size) {
+        return;
+      }
+
       this.velocity.add(this.acceleration);
-      this.velocity.limit(
-        0,
-        this.config.terminalVelocity,
-        0,
-        this.config.terminalVelocity
-      );
+      const terminalV = this.config.terminalVelocityRate * this.size;
+
+      this.velocity.limit(0, terminalV, 0, terminalV);
 
       this.location.add(this.velocity);
       this.location.limit(
-        0,
-        this.config.width,
+        -100,
+        this.config.width + 100,
         0,
         this.config.height - this.size
       );
@@ -125,9 +124,7 @@
     }
 
     applyForce(force) {
-      if (!this.forces.find((f) => f.type === force.type)) {
-        this.forces.push(force);
-      }
+      this.forces.push(force);
     }
 
     update() {
@@ -158,7 +155,8 @@
     }
 
     __createSnowflake() {
-      const x = getRandom(0, this.config.width);
+      const x = getRandom(-100, this.config.width + 100);
+      const y = getRandom(-50, -10);
       const size = getRandom(1, 5);
 
       this.snowflakes.push(new Snowflake(x, -20, size, this.config));
@@ -177,7 +175,6 @@
     canvas.style.position = 'absolute';
     canvas.style.top = '0';
     canvas.style.left = '0';
-    canvas.style.border = '1px solid red';
 
     return canvas;
   }
@@ -186,6 +183,7 @@
     const system = new System(config);
     system.applyForce(new GravityForce());
     system.applyForce(new AirResistanceForce());
+    system.applyForce(new WindForce());
 
     const ctx = canvas.getContext('2d');
 
@@ -194,6 +192,7 @@
       system.update();
 
       system.snowflakes.forEach((sf) => {
+        ctx.fillStyle = 'rgb(86, 227, 255)';
         ctx.fillRect(sf.location.x, sf.location.y, sf.size, sf.size);
       });
     }
