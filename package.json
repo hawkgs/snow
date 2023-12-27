@@ -1,0 +1,11 @@
+{
+  "name": "snow",
+  "version": "1.0.0",
+  "description": "A simple js script for snow",
+  "main": "src/snow.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Georgi Serev (hawkgs)",
+  "license": "MIT"
+}
