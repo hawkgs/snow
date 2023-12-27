@@ -6,6 +6,8 @@
     height: 480,
     fps: 30,
     terminalVelocity: 15,
+    snowflakeTtl: 10000,
+    intensity: 2,
   };
 
   class Vector {
@@ -59,6 +61,12 @@
     }
   }
 
+  class AirResistanceForce extends Force {
+    constructor() {
+      super(0, -0.05, 'air-resistance');
+    }
+  }
+
   // class WindForce extends Force {
   //   constructor(vector) {
   //     super('wind', vector);
@@ -74,6 +82,7 @@
       this.velocity = new Vector(0, 0);
       this.size = size;
       this.config = config;
+      this.createdAt = Date.now();
     }
 
     get mass() {
@@ -82,7 +91,7 @@
 
     applyForce(force) {
       const fCopy = force.copy();
-      fCopy.multiply(this.mass);
+      fCopy.divide(this.mass);
 
       this.acceleration.add(fCopy);
     }
@@ -113,8 +122,6 @@
       this.config = config;
       this.snowflakes = [];
       this.forces = [];
-
-      this.__initialize();
     }
 
     applyForce(force) {
@@ -124,22 +131,37 @@
     }
 
     update() {
-      this.snowflakes.forEach((sf) => {
-        this.forces.forEach((f) => {
-          sf.applyForce(f);
-        });
+      this.__createSnowflakeLayer();
 
-        sf.update();
+      const markedForDestruct = [];
+
+      this.snowflakes.forEach((sf, idx) => {
+        if (Date.now() - sf.createdAt > this.config.snowflakeTtl) {
+          markedForDestruct.push(idx);
+        } else {
+          this.forces.forEach((f) => {
+            sf.applyForce(f);
+          });
+          sf.update();
+        }
+      });
+
+      markedForDestruct.forEach((idx) => {
+        this.snowflakes.splice(idx, 1);
       });
     }
 
-    __initialize() {
-      for (let i = 0; i <= 150; i++) {
-        const x = getRandom(0, this.config.width);
-        const size = getRandom(1, 5);
-
-        this.snowflakes.push(new Snowflake(x, -20, size, this.config));
+    __createSnowflakeLayer() {
+      for (let i = 0; i <= this.config.intensity; i++) {
+        this.__createSnowflake();
       }
+    }
+
+    __createSnowflake() {
+      const x = getRandom(0, this.config.width);
+      const size = getRandom(1, 5);
+
+      this.snowflakes.push(new Snowflake(x, -20, size, this.config));
     }
   }
 
@@ -163,6 +185,7 @@
   function initializeSystem(config, canvas) {
     const system = new System(config);
     system.applyForce(new GravityForce());
+    system.applyForce(new AirResistanceForce());
 
     const ctx = canvas.getContext('2d');
 
