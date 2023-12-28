@@ -124,6 +124,7 @@
     const WIND_MAG = 0.08;
     const v = new Vector(WIND_MAG, 0);
     v.rotate(WIND_D);
+    v.multiply(new Vector(1, -1));
 
     return new Force(v.x, v.y, 'wind');
   }
@@ -142,6 +143,15 @@
     return new Force(v.x, v.y, 'drag');
   }
 
+  function jigglingForceFactory(state) {
+    const positive = Math.random() > 0.5 ? 1 : -1;
+    const magnitude = Math.random();
+    const m = (state.mass / state.mass) * 2;
+    const x = magnitude * positive * m;
+
+    return new Force(x, 0, 'jiggle');
+  }
+
   class Snowflake {
     constructor(x, y, size, translucency, config) {
       this.location = new Vector(x, y);
@@ -156,10 +166,8 @@
     }
 
     applyForce(force) {
-      const fCopy = force.copy();
-      fCopy.divide(this.mass);
-
-      this.acceleration.add(fCopy);
+      force.divide(this.mass);
+      this.acceleration.add(force);
     }
 
     update() {
@@ -173,11 +181,11 @@
       this.velocity.add(this.acceleration);
       const terminalV = c.terminalVelocityRate * this.size;
 
-      this.velocity.limit(0, terminalV, 0, terminalV);
+      this.velocity.limit(-terminalV, terminalV, -terminalV, terminalV);
 
       this.location.add(this.velocity);
       this.location.limit(
-        c.offScreenOffset * -1,
+        -c.offScreenOffset,
         c.width + c.offScreenOffset,
         0,
         c.height - this.size
@@ -240,9 +248,9 @@
 
     __createSnowflake() {
       const c = this.config;
-      const x = getRandom(c.offScreenOffset * -1, c.width + c.offScreenOffset);
+      const x = getRandom(-c.offScreenOffset, c.width + c.offScreenOffset);
       const y = getRandom(-500, -200);
-      const translucency = getRandom(0.1, 1);
+      const translucency = getRandom(1, 10) / 10;
       const size = getRandom(1, 5);
 
       this.snowflakes.push(
@@ -252,7 +260,7 @@
   }
 
   function getRandom(min, max) {
-    return Math.random() * (max - min) + min;
+    return Math.round(Math.random() * (max - min) + min);
   }
 
   function createCanvas(config) {
@@ -272,6 +280,7 @@
     system.applyForceFactory(gravityForceFactory);
     system.applyForceFactory(dragForceFactory);
     system.applyForceFactory(windForceFactory);
+    system.applyForceFactory(jigglingForceFactory);
 
     const ctx = canvas.getContext('2d');
 
