@@ -11,8 +11,8 @@
   <script>
     const el = document.getElementById('snow-container');
     Snow.attachToElement(el, {
-      width: window.innerWidth,
-      height: window.innerHeight,
+      width: el.clientWidth,
+      height: el.clientHeight,
     });
   </script>
 </html>

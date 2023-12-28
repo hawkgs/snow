@@ -7,7 +7,7 @@
     fps: 30,
     terminalVelocityRate: 5,
     snowflakeTtl: 30000,
-    intensity: 3,
+    snowfallIntensity: 4,
     offScreenOffset: 300,
   };
 
@@ -70,17 +70,6 @@
       return this;
     }
 
-    rotate(degrees) {
-      const rads = 2 * Math.PI * (degrees / 360);
-      const cos = Math.cos(rads);
-      const sin = Math.sin(rads);
-
-      this.x = this.x * cos - this.y * sin;
-      this.y = this.x * sin + this.y * cos;
-
-      return this;
-    }
-
     limit(minX, maxX, minY, maxY) {
       this.x = Math.min(this.x, maxX);
       this.x = Math.max(minX, this.x);
@@ -104,52 +93,35 @@
     }
   }
 
-  class Force extends Vector {
-    constructor(x, y, name) {
-      super(x, y);
-      this.name = name;
-    }
-  }
-
   function gravityForceFactory(state) {
     const GRAVITY_C = 0.08;
-    const v = new Vector(0, GRAVITY_C);
-    v.multiply(state.mass);
-
-    return new Force(v.x, v.y, 'gravity');
+    return new Vector(0, GRAVITY_C * state.mass);
   }
 
   function windForceFactory() {
-    const WIND_D = 330;
-    const WIND_MAG = 0.08;
-    const v = new Vector(WIND_MAG, 0);
-    v.rotate(WIND_D);
-    v.multiply(new Vector(1, -1));
-
-    return new Force(v.x, v.y, 'wind');
+    const WIND_MAG = 0.07;
+    return new Vector(WIND_MAG, 0);
   }
 
   function dragForceFactory(state) {
     const DRAG_C = 0.1;
     const v = state.velocity;
-
-    const speed = state.velocity.magnitude();
+    const speed = v.magnitude();
     const dragMagnitude = DRAG_C * speed * speed;
 
     v.multiply(-1);
     v.normalize();
-    v.multiply(dragMagnitude);
 
-    return new Force(v.x, v.y, 'drag');
+    return v.multiply(dragMagnitude);
   }
 
   function jigglingForceFactory(state) {
     const positive = Math.random() > 0.5 ? 1 : -1;
     const magnitude = Math.random();
-    const m = (state.mass / state.mass) * 2;
+    const m = state.mass > 1 ? (state.mass / state.mass) * 2 : 1;
     const x = magnitude * positive * m;
 
-    return new Force(x, 0, 'jiggle');
+    return new Vector(x, 0);
   }
 
   class Snowflake {
@@ -171,16 +143,15 @@
     }
 
     update() {
-      const c = this.config;
-
-      if (this.atRest || this.location.y >= c.height - this.size) {
+      if (this.atRest || this.location.y >= this.config.height - this.size) {
         this.atRest = true;
         return;
       }
 
       this.velocity.add(this.acceleration);
-      const terminalV = c.terminalVelocityRate * this.size;
 
+      const c = this.config;
+      const terminalV = c.terminalVelocityRate * this.size;
       this.velocity.limit(-terminalV, terminalV, -terminalV, terminalV);
 
       this.location.add(this.velocity);
@@ -219,7 +190,7 @@
       for (let i = 0; i < this.snowflakes.length; i++) {
         const sf = this.snowflakes[i];
 
-        if (Date.now() - sf.createdAt > this.config.snowflakeTtl) {
+        if (Date.now() - sf.createdAt >= this.config.snowflakeTtl) {
           markedForDestruct.push(i);
         } else if (!sf.atRest) {
           for (const factory of this.forceFactories) {
@@ -241,7 +212,7 @@
     }
 
     __createSnowflakeLayer() {
-      for (let i = 0; i <= this.config.intensity; i++) {
+      for (let i = 0; i < this.config.snowfallIntensity; i++) {
         this.__createSnowflake();
       }
     }
@@ -303,8 +274,8 @@
       }
     }
 
-    function animate(then, fpsInterval, elapsed) {
-      requestAnimationFrame(() => animate(then, fpsInterval, elapsed));
+    function animate(fpsInterval, then, elapsed) {
+      requestAnimationFrame(() => animate(fpsInterval, then, elapsed));
 
       const now = Date.now();
       elapsed = now - then;
@@ -318,10 +289,7 @@
 
     function startAnimating(fps) {
       const fpsInterval = 1000 / fps;
-      const then = Date.now();
-      const elapsed = 0;
-
-      animate(then, fpsInterval, elapsed);
+      animate(fpsInterval, Date.now(), 0);
     }
 
     startAnimating(config.fps);
@@ -334,9 +302,9 @@
   function attachToElement(el, config) {
     const cfg = { ...DEFAULT_CONFIG, ...config };
     const canvas = createCanvas(cfg);
-    initializeSystem(cfg, canvas);
-
     el.appendChild(canvas);
+
+    initializeSystem(cfg, canvas);
   }
 
   window.Snow = {
