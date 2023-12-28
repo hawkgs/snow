@@ -4,8 +4,12 @@
   "description": "A simple js script for snow",
   "main": "src/snow.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "uglify": "uglifyjs scripts/snow.js -c -m -o scripts/snow.min.js"
   },
   "author": "Georgi Serev (hawkgs)",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "uglify-js": "^3.17.4"
+  }
 }
