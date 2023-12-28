@@ -1,6 +1,29 @@
 (function () {
   'use strict';
 
+  /**
+   * Snowfall configuration object.
+   * @typedef {Object} SnowfallConfig
+   * @property {number} width - Width of the Canvas element.
+   * @property {number} height - Height of the Canvas element.
+   * @property {number} fps - Animation FPS.
+   * @property {number} terminalVelocityRate - The rate represents the max velocity based on the mass of the snowflake.
+   * @property {number} snowflakeTtl - Snowflake time to live in miliseconds.
+   * @property {number} snowfallIntensity - Snowfall intensity. Unbound integer. Keep within 1-50.
+   * @property {number} offScreenOffset - Offset negative and positive X axis snowfall offset in pixels.
+   */
+
+  /**
+   * Snowflake/particle state.
+   * @typedef {Object} SnowflakeState
+   * @property {Vector} location - Location vector copy.
+   * @property {Vector} velocity - Velocity vector copy.
+   * @property {number} mass - Mass.
+   */
+
+  /**
+   * @type {SnowfallConfig}
+   */
   const DEFAULT_CONFIG = {
     width: 640,
     height: 480,
@@ -18,9 +41,8 @@
     }
 
     /**
-     *
      * @param {Vector | number} arg
-     * @returns
+     * @returns Vector
      */
     add(arg) {
       const vector = this.__vectorize(arg);
@@ -31,9 +53,8 @@
     }
 
     /**
-     *
      * @param {Vector | number} arg
-     * @returns
+     * @returns Vector
      */
     divide(arg) {
       const vector = this.__vectorize(arg);
@@ -44,9 +65,8 @@
     }
 
     /**
-     *
      * @param {Vector | number} arg
-     * @returns
+     * @returns Vector
      */
     multiply(arg) {
       const vector = this.__vectorize(arg);
@@ -64,24 +84,37 @@
       const mag = this.magnitude();
 
       if (mag !== 0) {
-        this.divide(new Vector(mag, mag));
+        this.divide(mag);
       }
 
       return this;
     }
 
+    /**
+     * @param {number} minX
+     * @param {number} maxX
+     * @param {number} minY
+     * @param {number} maxY
+     * @returns Vector
+     */
     limit(minX, maxX, minY, maxY) {
       this.x = Math.min(this.x, maxX);
       this.x = Math.max(minX, this.x);
 
       this.y = Math.min(this.y, maxY);
       this.y = Math.max(minY, this.y);
+
+      return this;
     }
 
     copy() {
       return new Vector(this.x, this.y);
     }
 
+    /**
+     * @param {Vector | number} arg
+     * @returns Vector
+     */
     __vectorize(arg) {
       if (arg instanceof Vector) {
         return arg;
@@ -93,7 +126,12 @@
     }
   }
 
+  /**
+   * @param {SnowflakeState} state
+   * @returns Vector
+   */
   function gravityForceFactory(state) {
+    // Note(Georgi): Using positive Y since the Canvas Y axis is inverted (top-left corner is 0,0).
     const GRAVITY_C = 0.08;
     return new Vector(0, GRAVITY_C * state.mass);
   }
@@ -103,21 +141,34 @@
     return new Vector(WIND_MAG, 0);
   }
 
+  /**
+   * @param {SnowflakeState} state
+   * @returns Vector
+   */
   function dragForceFactory(state) {
     const DRAG_C = 0.1;
     const v = state.velocity;
     const speed = v.magnitude();
+    // Note(Georgi): Simplified drag equation.
     const dragMagnitude = DRAG_C * speed * speed;
 
+    // Note(Georgi): Invert force.
     v.multiply(-1);
     v.normalize();
 
     return v.multiply(dragMagnitude);
   }
 
+  /**
+   * Jiggle effect. Purely adjusted/tuned to look realistic.
+   * @param {SnowflakeState} state
+   * @returns
+   */
   function jigglingForceFactory(state) {
     const positive = Math.random() > 0.5 ? 1 : -1;
     const magnitude = Math.random();
+
+    // Note(Georgi): Don't increase magnitude for lighter objects.
     const m = state.mass > 1 ? (state.mass / state.mass) * 2 : 1;
     const x = magnitude * positive * m;
 
@@ -125,6 +176,14 @@
   }
 
   class Snowflake {
+    /**
+     *
+     * @param {number} x
+     * @param {number} y
+     * @param {number} size
+     * @param {number} translucency
+     * @param {SnowfallConfig} config
+     */
     constructor(x, y, size, translucency, config) {
       this.location = new Vector(x, y);
       this.acceleration = new Vector(0, 0);
@@ -137,7 +196,11 @@
       this.atRest = false;
     }
 
+    /**
+     * @param {Vector} force
+     */
     applyForce(force) {
+      // Note(Georgi): 2nd Newton's law
       force.divide(this.mass);
       this.acceleration.add(force);
     }
@@ -151,6 +214,7 @@
       this.velocity.add(this.acceleration);
 
       const c = this.config;
+      // Note(Georgi): Calculate terminal velocity based on the size of the snowflake.
       const terminalV = c.terminalVelocityRate * this.size;
       this.velocity.limit(-terminalV, terminalV, -terminalV, terminalV);
 
@@ -166,12 +230,15 @@
     }
 
     __calcMass() {
-      const mass = this.size * this.size;
-      return mass;
+      // Note(Georgi): Quadratic mass, so that heavier objects have increased impact.
+      return this.size * this.size;
     }
   }
 
-  class System {
+  class Snowfall {
+    /**
+     * @param {SnowfallConfig} config
+     */
     constructor(config) {
       this.config = config;
       this.snowflakes = [];
@@ -196,7 +263,7 @@
           for (const factory of this.forceFactories) {
             sf.applyForce(
               factory({
-                acceleration: sf.acceleration.copy(),
+                location: sf.location.copy(),
                 velocity: sf.velocity.copy(),
                 mass: sf.mass,
               })
@@ -220,6 +287,7 @@
     __createSnowflake() {
       const c = this.config;
       const x = getRandom(-c.offScreenOffset, c.width + c.offScreenOffset);
+      // Note(Georgi): Start snowfall off screen so that snowflakes can accelerate.
       const y = getRandom(-500, -200);
       const translucency = getRandom(1, 10) / 10;
       const size = getRandom(1, 5);
@@ -230,13 +298,22 @@
     }
   }
 
+  /**
+   * @param {number} min
+   * @param {number} max
+   * @returns number
+   */
   function getRandom(min, max) {
     return Math.round(Math.random() * (max - min) + min);
   }
 
+  /**
+   * @param {SnowfallConfig} config
+   * @returns HTMLCanvasElement
+   */
   function createCanvas(config) {
     const canvas = document.createElement('canvas');
-    canvas.id = 'snow-canvas';
+    canvas.className = 'snow-canvas';
     canvas.width = config.width;
     canvas.height = config.height;
     canvas.style.position = 'absolute';
@@ -246,20 +323,26 @@
     return canvas;
   }
 
-  function initializeSystem(config, canvas) {
-    const system = new System(config);
-    system.applyForceFactory(gravityForceFactory);
-    system.applyForceFactory(dragForceFactory);
-    system.applyForceFactory(windForceFactory);
-    system.applyForceFactory(jigglingForceFactory);
+  /**
+   * @param {SnowfallConfig} config
+   * @param {HTMLCanvasElement} canvas
+   */
+  function initSnowfall(config, canvas) {
+    const snow = new Snowfall(config);
+    snow.applyForceFactory(gravityForceFactory);
+    snow.applyForceFactory(dragForceFactory);
+    snow.applyForceFactory(windForceFactory);
+    snow.applyForceFactory(jigglingForceFactory);
 
     const ctx = canvas.getContext('2d');
 
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      system.update();
+      snow.update();
 
-      for (const sf of system.snowflakes) {
+      for (const sf of snow.snowflakes) {
+        // Note(Georgi): Due to the variable translucency we can't use moveTo()
+        // and move beginPath() and fill() outside of the loop.
         ctx.beginPath();
         ctx.arc(
           sf.location.x,
@@ -274,6 +357,11 @@
       }
     }
 
+    /**
+     * @param {number} fpsInterval
+     * @param {number} then
+     * @param {number} elapsed
+     */
     function animate(fpsInterval, then, elapsed) {
       requestAnimationFrame(() => animate(fpsInterval, then, elapsed));
 
@@ -287,6 +375,9 @@
       }
     }
 
+    /**
+     * @param {number} fps
+     */
     function startAnimating(fps) {
       const fpsInterval = 1000 / fps;
       animate(fpsInterval, Date.now(), 0);
@@ -296,15 +387,16 @@
   }
 
   /**
-   *
-   * @param {HTMLElement} el
+   * Attach HTML Canvas to the given element and initialize the snowfall.
+   * @param {HTMLElement} el - Host element.
+   * @param {SnowfallConfig} config - Snowfall configuration object.
    */
   function attachToElement(el, config) {
     const cfg = { ...DEFAULT_CONFIG, ...config };
     const canvas = createCanvas(cfg);
     el.appendChild(canvas);
 
-    initializeSystem(cfg, canvas);
+    initSnowfall(cfg, canvas);
   }
 
   window.Snow = {
