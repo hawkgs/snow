@@ -8,6 +8,7 @@
     terminalVelocityRate: 5,
     snowflakeTtl: 30000,
     intensity: 3,
+    offScreenOffset: 300,
   };
 
   class Vector {
@@ -16,6 +17,11 @@
       this.y = y;
     }
 
+    /**
+     *
+     * @param {Vector | number} arg
+     * @returns
+     */
     add(arg) {
       const vector = this.__vectorize(arg);
       this.x += vector.x;
@@ -24,6 +30,11 @@
       return this;
     }
 
+    /**
+     *
+     * @param {Vector | number} arg
+     * @returns
+     */
     divide(arg) {
       const vector = this.__vectorize(arg);
       this.x /= vector.x;
@@ -32,6 +43,11 @@
       return this;
     }
 
+    /**
+     *
+     * @param {Vector | number} arg
+     * @returns
+     */
     multiply(arg) {
       const vector = this.__vectorize(arg);
       this.x *= vector.x;
@@ -50,6 +66,17 @@
       if (mag !== 0) {
         this.divide(new Vector(mag, mag));
       }
+
+      return this;
+    }
+
+    rotate(degrees) {
+      const rads = 2 * Math.PI * (degrees / 360);
+      const cos = Math.cos(rads);
+      const sin = Math.sin(rads);
+
+      this.x = this.x * cos - this.y * sin;
+      this.y = this.x * sin + this.y * cos;
 
       return this;
     }
@@ -78,51 +105,41 @@
   }
 
   class Force extends Vector {
-    constructor(x, y, name, isVariable) {
+    constructor(x, y, name) {
       super(x, y);
       this.name = name;
-      this.isVariable = isVariable;
-    }
-
-    calculate() {
-      throw new Error('Force: calculate() not implemented.');
     }
   }
 
-  class GravityForce extends Force {
-    constructor() {
-      super(0, 0.08, 'gravity', true);
-    }
+  function gravityForceFactory(state) {
+    const GRAVITY_C = 0.08;
+    const v = new Vector(0, GRAVITY_C);
+    v.multiply(state.mass);
 
-    calculate(state) {
-      return this.copy().multiply(state.mass);
-    }
+    return new Force(v.x, v.y, 'gravity');
   }
 
-  class WindForce extends Force {
-    constructor() {
-      super(0.05, 0, 'wind', false);
-    }
+  function windForceFactory() {
+    const WIND_D = 330;
+    const WIND_MAG = 0.08;
+    const v = new Vector(WIND_MAG, 0);
+    v.rotate(WIND_D);
+
+    return new Force(v.x, v.y, 'wind');
   }
 
-  class DragForce extends Force {
-    constructor() {
-      super(0, 0, 'drag', true);
-    }
+  function dragForceFactory(state) {
+    const DRAG_C = 0.1;
+    const v = state.velocity;
 
-    calculate(state) {
-      const DRAG_C = 0.1;
-      const drag = state.velocity;
+    const speed = state.velocity.magnitude();
+    const dragMagnitude = DRAG_C * speed * speed;
 
-      const speed = state.velocity.magnitude();
-      const dragMagnitude = DRAG_C * speed * speed;
+    v.multiply(-1);
+    v.normalize();
+    v.multiply(dragMagnitude);
 
-      drag.multiply(new Vector(-1, -1));
-      drag.normalize();
-      drag.multiply(new Vector(dragMagnitude, dragMagnitude));
-
-      return drag;
-    }
+    return new Force(v.x, v.y, 'drag');
   }
 
   class Snowflake {
@@ -135,6 +152,7 @@
       this.translucency = translucency;
       this.mass = this.__calcMass();
       this.createdAt = Date.now();
+      this.atRest = false;
     }
 
     applyForce(force) {
@@ -145,30 +163,32 @@
     }
 
     update() {
-      if (this.location.y >= this.config.height - this.size) {
+      const c = this.config;
+
+      if (this.atRest || this.location.y >= c.height - this.size) {
+        this.atRest = true;
         return;
       }
 
       this.velocity.add(this.acceleration);
-      const terminalV = this.config.terminalVelocityRate * this.size;
+      const terminalV = c.terminalVelocityRate * this.size;
 
       this.velocity.limit(0, terminalV, 0, terminalV);
 
       this.location.add(this.velocity);
       this.location.limit(
-        -300,
-        this.config.width + 300,
+        c.offScreenOffset * -1,
+        c.width + c.offScreenOffset,
         0,
-        this.config.height - this.size
+        c.height - this.size
       );
 
-      this.acceleration = new Vector(0, 0);
+      this.acceleration.multiply(0);
     }
 
     __calcMass() {
       const mass = this.size * this.size;
-
-      return new Vector(mass, mass);
+      return mass;
     }
   }
 
@@ -176,11 +196,11 @@
     constructor(config) {
       this.config = config;
       this.snowflakes = [];
-      this.forces = [];
+      this.forceFactories = [];
     }
 
-    applyForce(force) {
-      this.forces.push(force);
+    applyForceFactory(factory) {
+      this.forceFactories.push(factory);
     }
 
     update() {
@@ -193,16 +213,14 @@
 
         if (Date.now() - sf.createdAt > this.config.snowflakeTtl) {
           markedForDestruct.push(i);
-        } else {
-          for (const f of this.forces) {
+        } else if (!sf.atRest) {
+          for (const factory of this.forceFactories) {
             sf.applyForce(
-              !f.isVariable
-                ? f
-                : f.calculate({
-                    acceleration: sf.acceleration.copy(),
-                    velocity: sf.velocity.copy(),
-                    mass: sf.mass.copy(),
-                  })
+              factory({
+                acceleration: sf.acceleration.copy(),
+                velocity: sf.velocity.copy(),
+                mass: sf.mass,
+              })
             );
           }
           sf.update();
@@ -221,8 +239,9 @@
     }
 
     __createSnowflake() {
-      const x = getRandom(-300, this.config.width + 300);
-      const y = getRandom(-1000, -500);
+      const c = this.config;
+      const x = getRandom(c.offScreenOffset * -1, c.width + c.offScreenOffset);
+      const y = getRandom(-500, -200);
       const translucency = getRandom(0.1, 1);
       const size = getRandom(1, 5);
 
@@ -250,9 +269,9 @@
 
   function initializeSystem(config, canvas) {
     const system = new System(config);
-    system.applyForce(new GravityForce());
-    system.applyForce(new DragForce());
-    system.applyForce(new WindForce());
+    system.applyForceFactory(gravityForceFactory);
+    system.applyForceFactory(dragForceFactory);
+    system.applyForceFactory(windForceFactory);
 
     const ctx = canvas.getContext('2d');
 
