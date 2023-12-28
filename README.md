@@ -4,7 +4,7 @@ A simple JS script for simulating 2D snow using the Canvas API.
 
 ![Demo](assets/demo.gif)
 
-**[Demo Page](https://htmlpreview.github.io/?https://github.com/hawkgs/snow/blob/main/index.html)**
+**[Demo Page](https://hawkgs-snow.netlify.app)**
 
 ## Usage
 
