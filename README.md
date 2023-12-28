@@ -2,7 +2,7 @@
 
 A simple JS script for simulating 2D snow using the Canvas API.
 
-![assets/demo.gif](Demo)
+![Demo](assets/demo.gif)
 
 **Demo:** [https://demo.demo](https://demo.demo)
 
