@@ -7,7 +7,7 @@
     fps: 30,
     terminalVelocityRate: 5,
     snowflakeTtl: 30000,
-    intensity: 2,
+    intensity: 3,
   };
 
   class Vector {
@@ -16,19 +16,42 @@
       this.y = y;
     }
 
-    add(vector) {
+    add(arg) {
+      const vector = this.__vectorize(arg);
       this.x += vector.x;
       this.y += vector.y;
+
+      return this;
     }
 
-    divide(vector) {
+    divide(arg) {
+      const vector = this.__vectorize(arg);
       this.x /= vector.x;
       this.y /= vector.y;
+
+      return this;
     }
 
-    multiply(vector) {
+    multiply(arg) {
+      const vector = this.__vectorize(arg);
       this.x *= vector.x;
       this.y *= vector.y;
+
+      return this;
+    }
+
+    magnitude() {
+      return Math.sqrt(this.x * this.x + this.y * this.y);
+    }
+
+    normalize() {
+      const mag = this.magnitude();
+
+      if (mag !== 0) {
+        this.divide(new Vector(mag, mag));
+      }
+
+      return this;
     }
 
     limit(minX, maxX, minY, maxY) {
@@ -42,34 +65,63 @@
     copy() {
       return new Vector(this.x, this.y);
     }
+
+    __vectorize(arg) {
+      if (arg instanceof Vector) {
+        return arg;
+      }
+      if (typeof arg === 'number') {
+        return new Vector(arg, arg);
+      }
+      throw new Error('Vector: Cannot vectorize argument.');
+    }
   }
 
   class Force extends Vector {
-    constructor(x, y, name) {
+    constructor(x, y, name, isVariable) {
       super(x, y);
       this.name = name;
+      this.isVariable = isVariable;
     }
 
-    update() {
-      /* noop */
+    calculate() {
+      throw new Error('Force: calculate() not implemented.');
     }
   }
 
   class GravityForce extends Force {
     constructor() {
-      super(0, 0.08, 'gravity');
+      super(0, 0.08, 'gravity', true);
     }
-  }
 
-  class AirResistanceForce extends Force {
-    constructor() {
-      super(0, -0.05, 'air-resistance');
+    calculate(state) {
+      return this.copy().multiply(state.mass);
     }
   }
 
   class WindForce extends Force {
     constructor() {
-      super(0.005, 0, 'wind');
+      super(0.05, 0, 'wind', false);
+    }
+  }
+
+  class DragForce extends Force {
+    constructor() {
+      super(0, 0, 'drag', true);
+    }
+
+    calculate(state) {
+      const DRAG_C = 0.1;
+      const drag = state.velocity;
+
+      const speed = state.velocity.magnitude();
+      const dragMagnitude = DRAG_C * speed * speed;
+
+      drag.multiply(new Vector(-1, -1));
+      drag.normalize();
+      drag.multiply(new Vector(dragMagnitude, dragMagnitude));
+
+      return drag;
     }
   }
 
@@ -81,11 +133,8 @@
       this.size = size;
       this.config = config;
       this.translucency = translucency;
+      this.mass = this.__calcMass();
       this.createdAt = Date.now();
-    }
-
-    get mass() {
-      return new Vector(this.size, this.size);
     }
 
     applyForce(force) {
@@ -115,6 +164,12 @@
 
       this.acceleration = new Vector(0, 0);
     }
+
+    __calcMass() {
+      const mass = this.size * this.size;
+
+      return new Vector(mass, mass);
+    }
   }
 
   class System {
@@ -133,20 +188,30 @@
 
       const markedForDestruct = [];
 
-      this.snowflakes.forEach((sf, idx) => {
+      for (let i = 0; i < this.snowflakes.length; i++) {
+        const sf = this.snowflakes[i];
+
         if (Date.now() - sf.createdAt > this.config.snowflakeTtl) {
-          markedForDestruct.push(idx);
+          markedForDestruct.push(i);
         } else {
-          this.forces.forEach((f) => {
-            sf.applyForce(f);
-          });
+          for (const f of this.forces) {
+            sf.applyForce(
+              !f.isVariable
+                ? f
+                : f.calculate({
+                    acceleration: sf.acceleration.copy(),
+                    velocity: sf.velocity.copy(),
+                    mass: sf.mass.copy(),
+                  })
+            );
+          }
           sf.update();
         }
-      });
+      }
 
-      markedForDestruct.forEach((idx) => {
+      for (const idx of markedForDestruct) {
         this.snowflakes.splice(idx, 1);
-      });
+      }
     }
 
     __createSnowflakeLayer() {
@@ -157,7 +222,7 @@
 
     __createSnowflake() {
       const x = getRandom(-300, this.config.width + 300);
-      const y = getRandom(-50, -10);
+      const y = getRandom(-1000, -500);
       const translucency = getRandom(0.1, 1);
       const size = getRandom(1, 5);
 
@@ -186,7 +251,7 @@
   function initializeSystem(config, canvas) {
     const system = new System(config);
     system.applyForce(new GravityForce());
-    system.applyForce(new AirResistanceForce());
+    system.applyForce(new DragForce());
     system.applyForce(new WindForce());
 
     const ctx = canvas.getContext('2d');
@@ -195,9 +260,7 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       system.update();
 
-      for (let i = 0; i < system.snowflakes.length; i++) {
-        const sf = system.snowflakes[i];
-
+      for (const sf of system.snowflakes) {
         ctx.beginPath();
         ctx.arc(
           sf.location.x,
@@ -212,14 +275,6 @@
       }
     }
 
-    function startAnimating(fps) {
-      const fpsInterval = 1000 / fps;
-      const then = Date.now();
-      const elapsed = 0;
-
-      animate(then, fpsInterval, elapsed);
-    }
-
     function animate(then, fpsInterval, elapsed) {
       requestAnimationFrame(() => animate(then, fpsInterval, elapsed));
 
@@ -231,6 +286,14 @@
 
         draw();
       }
+    }
+
+    function startAnimating(fps) {
+      const fpsInterval = 1000 / fps;
+      const then = Date.now();
+      const elapsed = 0;
+
+      animate(then, fpsInterval, elapsed);
     }
 
     startAnimating(config.fps);
