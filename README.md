@@ -4,14 +4,14 @@ A simple JS script for simulating 2D snow using the Canvas API.
 
 ![Demo](assets/demo.gif)
 
-**Demo:** [https://demo.demo](https://demo.demo)
+**[Demo Page](https://htmlpreview.github.io/?https://github.com/hawkgs/snow/blob/main/index.html)**
 
 ## Usage
 
 Simply add the script to your HTML:
 
 ```html
-<script src="scripts/snow.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/hawkgs/snow@main/scripts/snow.min.js"></script>
 ```
 
 Then you can use the global `Snow` object in your code:
