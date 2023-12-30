@@ -7,6 +7,9 @@
    * @property {number} width - Width of the Canvas element.
    * @property {number} height - Height of the Canvas element.
    * @property {number} fps - Animation FPS.
+   * @property {number} gravity - Gravity. Decimal numbers less than 1 render realistic results.
+   * @property {number} windMagnitude - Wind magnitude. Decimal numbers less than 1 render realistic results.
+   * @property {number} dragMagnitude - Drag magnitude. Decimal numbers less than 1 render realistic results.
    * @property {number} terminalVelocityRate - The rate represents the max velocity based on the mass of the snowflake.
    * @property {number} snowflakeTtl - Snowflake time to live in miliseconds.
    * @property {number} snowfallIntensity - Snowfall intensity. Unbound integer. Keep within 1-50.
@@ -28,6 +31,9 @@
     width: 640,
     height: 480,
     fps: 30,
+    gravity: 0.08, // Note(Georgi): Using positive Y since the Canvas Y axis is inverted (top-left corner is 0,0).
+    windMagnitude: 0.07,
+    dragMagnitude: 0.1,
     terminalVelocityRate: 5,
     snowflakeTtl: 30000,
     snowfallIntensity: 4,
@@ -127,30 +133,33 @@
   }
 
   /**
+   * @param {SnowfallConfig} config
    * @param {SnowflakeState} state
    * @returns Vector
    */
-  function gravityForceFactory(state) {
-    // Note(Georgi): Using positive Y since the Canvas Y axis is inverted (top-left corner is 0,0).
-    const GRAVITY_C = 0.08;
-    return new Vector(0, GRAVITY_C * state.mass);
-  }
-
-  function windForceFactory() {
-    const WIND_MAG = 0.07;
-    return new Vector(WIND_MAG, 0);
+  function gravityForceFactory(config, state) {
+    return new Vector(0, config.gravity * state.mass);
   }
 
   /**
+   * @param {SnowfallConfig} config
+   * @returns
+   */
+  function windForceFactory(config) {
+    const WIND_MAG = 0.07;
+    return new Vector(config.windMagnitude, 0);
+  }
+
+  /**
+   * @param {SnowfallConfig} config
    * @param {SnowflakeState} state
    * @returns Vector
    */
-  function dragForceFactory(state) {
-    const DRAG_C = 0.1;
+  function dragForceFactory(config, state) {
     const v = state.velocity;
     const speed = v.magnitude();
     // Note(Georgi): Simplified drag equation.
-    const dragMagnitude = DRAG_C * speed * speed;
+    const dragMagnitude = config.dragMagnitude * speed * speed;
 
     // Note(Georgi): Invert force.
     v.multiply(-1);
@@ -161,10 +170,11 @@
 
   /**
    * Jiggle effect. Purely adjusted/tuned to look realistic.
+   * @param {SnowfallConfig} _
    * @param {SnowflakeState} state
    * @returns
    */
-  function jigglingForceFactory(state) {
+  function jigglingForceFactory(_, state) {
     const positive = Math.random() > 0.5 ? 1 : -1;
     const magnitude = Math.random();
 
@@ -262,7 +272,7 @@
         } else if (!sf.atRest) {
           for (const factory of this.forceFactories) {
             sf.applyForce(
-              factory({
+              factory(this.config, {
                 location: sf.location.copy(),
                 velocity: sf.velocity.copy(),
                 mass: sf.mass,
