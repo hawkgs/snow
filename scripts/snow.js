@@ -31,13 +31,12 @@
     width: 640,
     height: 480,
     fps: 30,
-    gravity: 0.08, // Note(Georgi): Using positive Y since the Canvas Y axis is inverted (top-left corner is 0,0).
-    windMagnitude: 0.07,
+    gravity: 4, // Note(Georgi): Using positive Y since the Canvas Y axis is inverted (top-left corner is 0,0).
     dragMagnitude: 0.1,
-    terminalVelocityRate: 5,
-    snowflakeTtl: 30000,
-    snowfallIntensity: 4,
-    offScreenOffset: 300,
+    terminalVelocityRate: 10,
+    snowflakeTtl: 1500,
+    snowfallIntensity: 6,
+    offScreenOffset: 200,
   };
 
   class Vector {
@@ -143,15 +142,6 @@
 
   /**
    * @param {SnowfallConfig} config
-   * @returns
-   */
-  function windForceFactory(config) {
-    const WIND_MAG = 0.07;
-    return new Vector(config.windMagnitude, 0);
-  }
-
-  /**
-   * @param {SnowfallConfig} config
    * @param {SnowflakeState} state
    * @returns Vector
    */
@@ -168,23 +158,6 @@
     return v.multiply(dragMagnitude);
   }
 
-  /**
-   * Jiggle effect. Purely adjusted/tuned to look realistic.
-   * @param {SnowfallConfig} _
-   * @param {SnowflakeState} state
-   * @returns
-   */
-  function jigglingForceFactory(_, state) {
-    const positive = Math.random() > 0.5 ? 1 : -1;
-    const magnitude = Math.random();
-
-    // Note(Georgi): Don't increase magnitude for lighter objects.
-    const m = state.mass > 1 ? (state.mass / state.mass) * 2 : 1;
-    const x = magnitude * positive * m;
-
-    return new Vector(x, 0);
-  }
-
   class Snowflake {
     /**
      *
@@ -194,13 +167,12 @@
      * @param {number} translucency
      * @param {SnowfallConfig} config
      */
-    constructor(x, y, size, translucency, config) {
+    constructor(x, y, size, config) {
       this.location = new Vector(x, y);
       this.acceleration = new Vector(0, 0);
       this.velocity = new Vector(0, 0);
       this.size = size;
       this.config = config;
-      this.translucency = translucency;
       this.mass = this.__calcMass();
       this.createdAt = Date.now();
       this.atRest = false;
@@ -233,7 +205,7 @@
         -c.offScreenOffset,
         c.width + c.offScreenOffset,
         0,
-        c.height - this.size
+        c.height - this.size,
       );
 
       this.acceleration.multiply(0);
@@ -253,6 +225,10 @@
       this.config = config;
       this.snowflakes = [];
       this.forceFactories = [];
+
+      setInterval(() => {
+        console.log('Rendered snowflakes:', this.snowflakes.length);
+      }, 1500);
     }
 
     applyForceFactory(factory) {
@@ -276,7 +252,7 @@
                 location: sf.location.copy(),
                 velocity: sf.velocity.copy(),
                 mass: sf.mass,
-              })
+              }),
             );
           }
           sf.update();
@@ -299,12 +275,9 @@
       const x = getRandom(-c.offScreenOffset, c.width + c.offScreenOffset);
       // Note(Georgi): Start snowfall off screen so that snowflakes can accelerate.
       const y = getRandom(-500, -200);
-      const translucency = getRandom(1, 10) / 10;
-      const size = getRandom(1, 5);
+      const size = getRandom(3, 4);
 
-      this.snowflakes.push(
-        new Snowflake(x, y, size, translucency, this.config)
-      );
+      this.snowflakes.push(new Snowflake(x, y, size, this.config));
     }
   }
 
@@ -341,8 +314,6 @@
     const snow = new Snowfall(config);
     snow.applyForceFactory(gravityForceFactory);
     snow.applyForceFactory(dragForceFactory);
-    snow.applyForceFactory(windForceFactory);
-    snow.applyForceFactory(jigglingForceFactory);
 
     const ctx = canvas.getContext('2d');
 
@@ -350,21 +321,19 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       snow.update();
 
+      ctx.beginPath();
+      ctx.lineWidth = 1;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = `rgba(141, 190, 203, 0.9)`;
+
       for (const sf of snow.snowflakes) {
-        // Note(Georgi): Due to the variable translucency we can't use moveTo()
-        // and move beginPath() and fill() outside of the loop.
-        ctx.beginPath();
-        ctx.arc(
-          sf.location.x,
-          sf.location.y,
-          sf.size / 2,
-          0,
-          2 * Math.PI,
-          false
-        );
-        ctx.fillStyle = `rgba(255, 255, 255, ${sf.translucency})`;
-        ctx.fill();
+        ctx.moveTo(sf.location.x, sf.location.y);
+        ctx.lineTo(sf.location.x, sf.location.y + sf.size * 2);
+
+        ctx.stroke();
       }
+
+      ctx.fill();
     }
 
     /**
