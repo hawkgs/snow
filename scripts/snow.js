@@ -146,7 +146,6 @@
    * @returns
    */
   function windForceFactory(config) {
-    const WIND_MAG = 0.07;
     return new Vector(config.windMagnitude, 0);
   }
 
@@ -233,7 +232,7 @@
         -c.offScreenOffset,
         c.width + c.offScreenOffset,
         0,
-        c.height - this.size
+        c.height - this.size,
       );
 
       this.acceleration.multiply(0);
@@ -276,7 +275,7 @@
                 location: sf.location.copy(),
                 velocity: sf.velocity.copy(),
                 mass: sf.mass,
-              })
+              }),
             );
           }
           sf.update();
@@ -303,7 +302,7 @@
       const size = getRandom(1, 5);
 
       this.snowflakes.push(
-        new Snowflake(x, y, size, translucency, this.config)
+        new Snowflake(x, y, size, translucency, this.config),
       );
     }
   }
@@ -360,7 +359,7 @@
           sf.size / 2,
           0,
           2 * Math.PI,
-          false
+          false,
         );
         ctx.fillStyle = `rgba(255, 255, 255, ${sf.translucency})`;
         ctx.fill();
